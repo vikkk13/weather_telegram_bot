@@ -1,0 +1,70 @@
+# ==============
+# PYTHON FILES
+# ==============
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.tmp
+*.log
+
+# Byte-compiled / optimized / DLL files
+*.so
+*.dll
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+.ENV/
+
+# ==============
+# PROJECT FILES
+# ==============
+
+# 🔒 Токен Telegram бота
+config.py
+
+# SQLite база
+*.db
+*.sqlite3
+
+# кэш aiogram
+aiohttp_cache/
+
+# Секреты/ключи
+*.key
+*.secret
+
+# ==============
+# SYSTEM / IDE
+# ==============
+
+# VSCode
+.vscode/
+
+# PyCharm / JetBrains
+.idea/
+*.iml
+
+# MacOS
+.DS_Store
+
+# Linux
+*.swp
+*.swo
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# ==============
+# BUILD / DIST
+# ==============
+
+build/
+dist/
+*.egg-info/
