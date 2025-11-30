@@ -16,7 +16,7 @@ WEATHER_CODES = {
     55: "🌧 Сильная морось",
 
     56: "🌦 Ледяная морось",
-    57: "🌧 Сильная ледяная морось",
+    57: "🌧 Лёдянная морось",
 
     61: "🌦 Лёгкий дождь",
     63: "🌧 Дождь",
@@ -45,7 +45,7 @@ WEATHER_CODES = {
 
 
 def get_coords(city: str):
-    """Геокодинг города → lat/lon"""
+    """Геокодинг города → lat / lon"""
     url = f"https://geocoding-api.open-meteo.com/v1/search?name={city}&count=1&language=ru"
     data = requests.get(url).json()
 
@@ -56,8 +56,18 @@ def get_coords(city: str):
     return result["latitude"], result["longitude"]
 
 
-def get_hourly(city: str, for_tomorrow=False):
-    """Получение почасового прогноза"""
+def get_hour_data(hourly_times, temps, codes, date, hour):
+    """Получить температуру и код погоды для конкретного часа"""
+    target = f"{date}T{hour:02d}:00"
+
+    if target in hourly_times:
+        idx = hourly_times.index(target)
+        return temps[idx], codes[idx]
+    return None, None
+
+
+def get_forecast(city: str, tomorrow=False):
+    """Получаем данные и формируем прогноз"""
 
     lat, lon = get_coords(city)
     if not lat:
@@ -65,8 +75,7 @@ def get_hourly(city: str, for_tomorrow=False):
 
     date = (
         (datetime.now() + timedelta(days=1)).date().isoformat()
-        if for_tomorrow
-        else datetime.now().date().isoformat()
+        if tomorrow else datetime.now().date().isoformat()
     )
 
     url = (
@@ -75,86 +84,61 @@ def get_hourly(city: str, for_tomorrow=False):
         f"&hourly=temperature_2m,weathercode"
         f"&timezone=auto"
     )
-
     data = requests.get(url).json()
-    times  = data["hourly"]["time"]
-    temps  = data["hourly"]["temperature_2m"]
-    codes  = data["hourly"]["weathercode"]
 
-    filtered = []
-    for t, temp, code in zip(times, temps, codes):
-        if t.startswith(date):
-            filtered.append((t, temp, code))
+    hourly_times = data["hourly"]["time"]
+    temps = data["hourly"]["temperature_2m"]
+    codes = data["hourly"]["weathercode"]
 
-    return filtered
+    # Часы, которые мы берём
+    times_needed = {
+        "🌅 Утро": 8,
+        "🌞 День": 13,
+        "🌇 Вечер": 19
+    }
 
+    result = []
 
-def split_by_parts(hourly):
-    """Деление на утро / день / вечер"""
+    for part_name, hour in times_needed.items():
+        temp, code = get_hour_data(hourly_times, temps, codes, date, hour)
 
-    morning = []
-    day = []
-    evening = []
+        if temp is None:
+            result.append((part_name, "нет данных", ""))
+        else:
+            weather_text = WEATHER_CODES.get(code, "Неизвестно")
+            result.append((part_name, f"{temp:.1f}°C", weather_text))
 
-    for t, temp, code in hourly:
-        hour = int(t[11:13])
-
-        if 6 <= hour <= 11:
-            morning.append((t, temp, code))
-        elif 12 <= hour <= 17:
-            day.append((t, temp, code))
-        elif 18 <= hour <= 23:
-            evening.append((t, temp, code))
-
-    return morning, day, evening
+    return result
 
 
-def format_block(title, data):
-    """Форматирование блока (утро/день/вечер)"""
+def format_text(city: str, entries, tomorrow=False):
+    day_word = "завтра" if tomorrow else "сегодня"
+    text = f"📅 *Прогноз на {day_word} — {city}:*\n\n"
 
-    if not data:
-        return f"*{title}:* нет данных\n\n"
+    for name, temp, weather in entries:
+        if temp == "нет данных":
+            text += f"*{name}:* нет данных\n\n"
+        else:
+            text += (
+                f"*{name}:*\n"
+                f"🌡 Температура: *{temp}*\n"
+                f"{weather}\n\n"
+            )
 
-    # температура — МАКСИМУМ (как делают все погодные сервисы)
-    max_temp = max(temp for _, temp, _ in data)
-
-    # состояние погоды — самое частое
-    codes = [code for _, _, code in data]
-    main_code = max(set(codes), key=codes.count)
-    weather_text = WEATHER_CODES.get(main_code, "Неизвестно")
-
-    return (
-        f"*{title}:*\n"
-        f"🌡 Температура: *{max_temp:.1f}°C*\n"
-        f"{weather_text}\n\n"
-    )
+    return text
 
 
 def get_today_text(city: str):
-    hourly = get_hourly(city, for_tomorrow=False)
-    if not hourly:
+    data = get_forecast(city, tomorrow=False)
+    if not data:
         return "❌ Город не найден."
 
-    morning, day, evening = split_by_parts(hourly)
-
-    text = f"📅 *Прогноз на сегодня — {city}:*\n\n"
-    text += format_block("🌅 Утро", morning)
-    text += format_block("🌞 День", day)
-    text += format_block("🌇 Вечер", evening)
-
-    return text
+    return format_text(city, data, tomorrow=False)
 
 
 def get_tomorrow_text(city: str):
-    hourly = get_hourly(city, for_tomorrow=True)
-    if not hourly:
+    data = get_forecast(city, tomorrow=True)
+    if not data:
         return "❌ Город не найден."
 
-    morning, day, evening = split_by_parts(hourly)
-
-    text = f"📅 *Прогноз на завтра — {city}:*\n\n"
-    text += format_block("🌅 Утро", morning)
-    text += format_block("🌞 День", day)
-    text += format_block("🌇 Вечер", evening)
-
-    return text
+    return format_text(city, data, tomorrow=True)
